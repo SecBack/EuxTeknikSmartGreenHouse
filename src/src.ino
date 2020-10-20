@@ -10,6 +10,8 @@
 #define SENSOR_HUMID_ID 2
 #define SENSOR_PRES_ID 3
 
+#define WIFI_SSID "Sde-Guest"
+#define WIFI_PSWD ""
 
 // This is the Lets Encrypt certficate 
 const char* rootCACertificate = \
@@ -41,10 +43,6 @@ const char* rootCACertificate = \
 "KOqkqm57TH2H3eDJAkSnh6/DNFu0Qg==\n" \
 "-----END CERTIFICATE-----\n";
 
-// Replace with your network credentials
-const char* ssid     = "Sde-Guest";
-const char* password = "";
-
 // Domain for API
 const String serverName = "https://eux-teknik-smartgreenhouse.rasmusbundsgaard.dk";
 
@@ -63,7 +61,7 @@ Adafruit_BME280 bme;  // I2C
 void setup() {
   Serial.begin(115200);
 
-  WiFi.begin(ssid, password);
+  WiFi.begin(WIFI_SSID, WIFI_PSWD);
   Serial.println("Connecting");
 
   while(WiFi.status() != WL_CONNECTED) { 
@@ -101,7 +99,7 @@ void loop() {
       http.useHTTP10(true);
 
       // Domain name with full URL to 'API'
-      if (http.begin(serverName + "/esp.php?api_key=" + API_KEY)) {  
+      if (http.begin(serverName + "/api/v1/sensorData?api_token=" + API_KEY)) {  
         float sensorTempValue = 23.4;
         float sensorHumidValue = 50.0;
         float sensorPresValue = 1.0;
