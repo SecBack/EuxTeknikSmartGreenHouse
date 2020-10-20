@@ -5,20 +5,11 @@
 #include <Adafruit_Sensor.h>
 #include <Adafruit_BME280.h>
 
-#define API_KEY "tPmAT5Ab3j7F9"
-#define DEVICE_ID 1
+#define API_KEY "lEWQZliMMZgASzEwsOKtauUkWToAuiShRrJ7SWN3BHtGbMbaKMYT3dGiSu0E" // This is also unique to each device
 #define SENSOR_TEMP_ID 1
 #define SENSOR_HUMID_ID 2
 #define SENSOR_PRES_ID 3
 
-// API Key to verify
-String apiKeyValue = "tPmAT5Ab3j7F9";
-
-String deviceId = "1";
-
-String sensorId1 = "1"; // temperature
-String sensorId2 = "2"; // humidity
-String sensorId3 = "3"; // pressure
 
 // This is the Lets Encrypt certficate 
 const char* rootCACertificate = \
@@ -116,11 +107,11 @@ void loop() {
         float sensorPresValue = 1.0;
         String timeStamp = "1603186961";
 
-        // Data format: did:x,sid:y,v:z,t:a
+        // Data format: sid:x,v:y,t:z (sensor_id:x,value:y,timestamp:z)
         String postData = \
-          "did:" + String(DEVICE_ID) + "," + "sid:" + String(SENSOR_TEMP_ID)  + "," + "v:" + sensorTempValue  + "," + "t:" + timeStamp + "\n" \
-          "did:" + String(DEVICE_ID) + "," + "sid:" + String(SENSOR_HUMID_ID) + "," + "v:" + sensorHumidValue + "," + "t:" + timeStamp + "\n" \
-          "did:" + String(DEVICE_ID) + "," + "sid:" + String(SENSOR_PRES_ID)  + "," + "v:" + sensorPresValue  + "," + "t:" + timeStamp;
+          "sid:" + String(SENSOR_TEMP_ID)  + "," + "v:" + sensorTempValue  + "," + "t:" + timeStamp + "\n" \
+          "sid:" + String(SENSOR_HUMID_ID) + "," + "v:" + sensorHumidValue + "," + "t:" + timeStamp + "\n" \
+          "sid:" + String(SENSOR_PRES_ID)  + "," + "v:" + sensorPresValue  + "," + "t:" + timeStamp;
 
         http.addHeader("Content-Type", "text/plain");
 
