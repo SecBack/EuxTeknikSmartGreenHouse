@@ -5,6 +5,22 @@
 #include <Adafruit_Sensor.h>
 #include <Adafruit_BME280.h>
 
+#define API_KEY "tPmAT5Ab3j7F9"
+#define DEVICE_ID 1
+#define SENSOR_TEMP_ID 1
+#define SENSOR_HUMID_ID 2
+#define SENSOR_PRES_ID 3
+
+// API Key to verify
+String apiKeyValue = "tPmAT5Ab3j7F9";
+
+String deviceId = "1";
+
+String sensorId1 = "1"; // temperature
+String sensorId2 = "2"; // humidity
+String sensorId3 = "3"; // pressure
+
+// This is the Lets Encrypt certficate 
 const char* rootCACertificate = \
 "-----BEGIN CERTIFICATE-----\n" \
 "MIIEkjCCA3qgAwIBAgIQCgFBQgAAAVOFc2oLheynCDANBgkqhkiG9w0BAQsFADA/\n" \
@@ -38,31 +54,9 @@ const char* rootCACertificate = \
 const char* ssid     = "Sde-Guest";
 const char* password = "";
 
-// REPLACE with your Domain name and URL path or IP address with path
-const char* serverName = "https://eux-teknik-smartgreenhouse.rasmusbundsgaard.dk.com/post-esp-data.php";
+// Domain for API
+const String serverName = "https://eux-teknik-smartgreenhouse.rasmusbundsgaard.dk";
 
-// Keep this API Key value to be compatible with the PHP code provided in the project page. 
-// If you change the apiKeyValue value, the PHP file /post-esp-data.php also needs to have the same key 
-String apiKeyValue = "tPmAT5Ab3j7F9";
-
-String sensorName = "BME280";
-String sensorLocation = "Office";
-
-String deviceId;
-
-String sensorId1 = "1"; // temperature
-String sensorId2 = "2"; // humidity
-String sensorId3 = "3"; // pressure
-
-String sensorValue1; // temperature
-String sensorValue2; // humidity
-String sensorValue3; // pressure
-
-String timeStamp;
-
-String postData;
-
-#define DEVICE_ID 1
 /*#include <SPI.h>
 #define BME_SCK 18
 #define BME_MISO 19
@@ -77,18 +71,19 @@ Adafruit_BME280 bme;  // I2C
 
 void setup() {
   Serial.begin(115200);
-  
+
   WiFi.begin(ssid, password);
   Serial.println("Connecting");
+
   while(WiFi.status() != WL_CONNECTED) { 
     delay(500);
     Serial.print(".");
   }
+
   Serial.println("");
   Serial.print("Connected to WiFi network with IP Address: ");
   Serial.println(WiFi.localIP());
 
-  // (you can also pass in a Wire library object like &Wire2)
 //  bool status = bme.begin(0x76);
 //  if (!status) {
 //    Serial.println("Could not find a valid BME280 sensor, check wiring or change I2C address!");
@@ -96,11 +91,9 @@ void setup() {
 //  }
 }
 
-
-        
 void loop() {
-  //Check WiFi connection status
-  if(WiFi.status()== WL_CONNECTED) {
+  // Check WiFi connection status
+  if(WiFi.status() == WL_CONNECTED) {
     WiFiClientSecure *client = new WiFiClientSecure;
 
     if (!client) {
@@ -108,81 +101,52 @@ void loop() {
       delay(30000);
       return;
     }
-    
+
     client->setCACert(rootCACertificate);
-    
+
     {
       HTTPClient http;
-    
-      // Your Domain name with URL path or IP address with path
-      if (http.begin(serverName)) {  
-        // Specify content-type header
-        http.addHeader("Content-Type", "application/x-www-form-urlencoded");
-        
-        // Prepare your HTTP POST request data
-        //String httpRequestData = "api_key=" + apiKeyValue + "&sensor=" + sensorName
-        //                      + "&location=" + sensorLocation + "&value1=" + String(bme.readTemperature())
-        //                      + "&value2=" + String(bme.readHumidity()) + "&value3=" + String(bme.readPressure()/100.0F) + "";
-        
-        // You can comment the httpRequestData variable above
-        // then, use the httpRequestData variable below (for testing purposes without the BME280 sensor)
-        String httpRequestData = "api_key=tPmAT5Ab3j7F9&sensor=BME280&location=Office&value1=24.75&value2=49.54&value3=1005.14";
 
-        Serial.print("httpRequestData: ");
-        Serial.println(httpRequestData);
-    
+      http.useHTTP10(true);
+
+      // Domain name with full URL to 'API'
+      if (http.begin(serverName + "/esp.php?api_key=" + API_KEY)) {  
+        float sensorTempValue = 23.4;
+        float sensorHumidValue = 50.0;
+        float sensorPresValue = 1.0;
+        String timeStamp = "1603186961";
+
+        // Data format: did:x,sid:y,v:z,t:a
+        String postData = \
+          "did:" + String(DEVICE_ID) + "," + "sid:" + String(SENSOR_TEMP_ID)  + "," + "v:" + sensorTempValue  + "," + "t:" + timeStamp + "\n" \
+          "did:" + String(DEVICE_ID) + "," + "sid:" + String(SENSOR_HUMID_ID) + "," + "v:" + sensorHumidValue + "," + "t:" + timeStamp + "\n" \
+          "did:" + String(DEVICE_ID) + "," + "sid:" + String(SENSOR_PRES_ID)  + "," + "v:" + sensorPresValue  + "," + "t:" + timeStamp;
+
+        http.addHeader("Content-Type", "text/plain");
+
         // Send HTTP POST request
-        int httpResponseCode = http.POST(httpRequestData);
-         
-        // If you need an HTTP request with a content type: text/plain
-        //http.addHeader("Content-Type", "text/plain");
-        //int httpResponseCode = http.POST("Hello, World!");
+        int httpResponseCode = http.POST(postData);
 
-        deviceId = "1";
-
-        sensorValue1 = "23.4"; // temperature
-        sensorValue2 = "50"; // humidity
-        sensorValue3 = "1"; // pressure
-        
-        timeStamp = "19847528";
-
-        // data format: did:1,sid:1,v:100.03,t:1603178571
-        postData = 
-          "did:" + deviceId + "," + "sid:" + sensorId1 + "," + "v:" + sensorValue1 + "," + "t:" + timeStamp + "\n" \
-          "did:" + deviceId + "," + "sid:" + sensorId2 + "," + "v:" + sensorValue2 + "," + "t:" + timeStamp + "\n" \
-          "did:" + deviceId + "," + "sid:" + sensorId3 + "," + "v:" + sensorValue3 + "," + "t:" + timeStamp + "\n";
-        
-        Serial.print(postData);
-        
-        // If you need an HTTP request with a content type: application/json, use the following:
-        //http.addHeader("Content-Type", "application/json");
-        //int httpResponseCode = http.POST("{\"value1\":\"19\",\"value2\":\"67\",\"value3\":\"78\"}");
-            
         if (httpResponseCode>0) {
           Serial.print("HTTP Response code: ");
           Serial.println(httpResponseCode);
-
-          String payload = http.getString();
-          Serial.println(httpResponseCode);
-          Serial.println(payload);
         } else {
           Serial.print("Error code: ");
           Serial.println(httpResponseCode);
         }
-        
+
         // Free resources
         http.end();
-      
       } else {
         Serial.println("[HTTPS] Unable to connect");
       }
     }
 
     delete client;
-  }
-  else {
+  } else {
     Serial.println("WiFi Disconnected");
   }
-  //Send an HTTP POST request every 30 seconds
-  delay(30000);  
+
+  // Send an HTTP POST request every 30 seconds
+  delay(10000);  
 }
