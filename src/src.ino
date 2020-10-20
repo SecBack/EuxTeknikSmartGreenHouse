@@ -1,4 +1,5 @@
 #include <WiFi.h>
+#include "time.h"
 #include <HTTPClient.h>
 #include <WiFiClientSecure.h>
 #include <Wire.h>
@@ -12,6 +13,9 @@
 
 #define WIFI_SSID "Sde-Guest"
 #define WIFI_PSWD ""
+
+// Clock / NTP setup
+#define NTP_SERVER "pool.ntp.org"
 
 // This is the Lets Encrypt certficate 
 const char* rootCACertificate = \
@@ -69,9 +73,21 @@ void setup() {
     Serial.print(".");
   }
 
+  // Show IP to serial
   Serial.println("");
   Serial.print("Connected to WiFi network with IP Address: ");
   Serial.println(WiFi.localIP());
+
+  // Init and get the time
+  configTime(0, 0, NTP_SERVER);
+  struct tm timeinfo;
+  if(!getLocalTime(&timeinfo)) {
+    Serial.println("Failed to obtain time");
+  }
+  
+  Serial.println("");
+  Serial.print("Current timestamp:");
+  Serial.println(getCurrentTimestamp());
 
 //  bool status = bme.begin(0x76);
 //  if (!status) {
@@ -87,7 +103,7 @@ void loop() {
 
     if (!client) {
       Serial.println("Unable to create client");
-      delay(30000);
+      delay(10000);
       return;
     }
 
@@ -103,7 +119,7 @@ void loop() {
         float sensorTempValue = 23.4;
         float sensorHumidValue = 50.0;
         float sensorPresValue = 1.0;
-        String timeStamp = "1603186961";
+        String timeStamp = getCurrentTimestamp();
 
         // Data format: sid:x,v:y,t:z (sensor_id:x,value:y,timestamp:z)
         String postData = \
@@ -115,7 +131,7 @@ void loop() {
 
         // Send HTTP POST request
         int httpResponseCode = http.POST(postData);
-
+        
         if (httpResponseCode>0) {
           Serial.print("HTTP Response code: ");
           Serial.println(httpResponseCode);
@@ -136,6 +152,40 @@ void loop() {
     Serial.println("WiFi Disconnected");
   }
 
-  // Send an HTTP POST request every 30 seconds
-  delay(10000);  
+  // Send an HTTP POST request every 10 seconds
+  delay(5000);  
+}
+
+
+String getCurrentTimestamp() {  
+  // https://www.esp32.com/viewtopic.php?f=2&t=7328
+  struct timeval tv;
+  gettimeofday(&tv, NULL);
+  uint64_t milliseconds = tv.tv_sec * 1000LL + tv.tv_usec / 1000LL;
+
+  const int NUM_DIGITS = log10(milliseconds) + 1;
+  char str[NUM_DIGITS + 1];
+
+  char* retStr = uintToStr(milliseconds, str);
+  
+  return String(retStr);
+}
+
+char* uintToStr(const uint64_t num, char *str) {
+  // https://forum.arduino.cc/index.php?topic=378359.0
+  uint8_t i = 0;
+  uint64_t n = num;
+
+  do {
+    i++;
+  } while( n /= 10 );
+
+  str[i] = '\0';
+  n = num;
+
+  do {
+    str[--i] = ( n % 10 ) + '0';
+  } while (n /= 10);
+
+  return str;
 }
