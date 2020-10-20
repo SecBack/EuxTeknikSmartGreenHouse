@@ -34,7 +34,6 @@ const char* rootCACertificate = \
 "KOqkqm57TH2H3eDJAkSnh6/DNFu0Qg==\n" \
 "-----END CERTIFICATE-----\n";
 
-
 // Replace with your network credentials
 const char* ssid     = "Sde-Guest";
 const char* password = "";
@@ -49,6 +48,21 @@ String apiKeyValue = "tPmAT5Ab3j7F9";
 String sensorName = "BME280";
 String sensorLocation = "Office";
 
+String deviceId;
+
+String sensorId1 = "1"; // temperature
+String sensorId2 = "2"; // humidity
+String sensorId3 = "3"; // pressure
+
+String sensorValue1; // temperature
+String sensorValue2; // humidity
+String sensorValue3; // pressure
+
+String timeStamp;
+
+String postData;
+
+#define DEVICE_ID 1
 /*#include <SPI.h>
 #define BME_SCK 18
 #define BME_MISO 19
@@ -82,6 +96,8 @@ void setup() {
 //  }
 }
 
+
+        
 void loop() {
   //Check WiFi connection status
   if(WiFi.status()== WL_CONNECTED) {
@@ -121,6 +137,22 @@ void loop() {
         // If you need an HTTP request with a content type: text/plain
         //http.addHeader("Content-Type", "text/plain");
         //int httpResponseCode = http.POST("Hello, World!");
+
+        deviceId = "1";
+
+        sensorValue1 = "23.4"; // temperature
+        sensorValue2 = "50"; // humidity
+        sensorValue3 = "1"; // pressure
+        
+        timeStamp = "19847528";
+
+        // data format: did:1,sid:1,v:100.03,t:1603178571
+        postData = 
+          "did:" + deviceId + "," + "sid:" + sensorId1 + "," + "v:" + sensorValue1 + "," + "t:" + timeStamp + "\n" \
+          "did:" + deviceId + "," + "sid:" + sensorId2 + "," + "v:" + sensorValue2 + "," + "t:" + timeStamp + "\n" \
+          "did:" + deviceId + "," + "sid:" + sensorId3 + "," + "v:" + sensorValue3 + "," + "t:" + timeStamp + "\n";
+        
+        Serial.print(postData);
         
         // If you need an HTTP request with a content type: application/json, use the following:
         //http.addHeader("Content-Type", "application/json");
@@ -154,4 +186,3 @@ void loop() {
   //Send an HTTP POST request every 30 seconds
   delay(30000);  
 }
-
