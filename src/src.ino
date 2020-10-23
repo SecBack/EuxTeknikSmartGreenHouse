@@ -96,7 +96,7 @@ void loop() {
     return;
   }
 
-  bool successPush =pushData();
+  bool successPush = pushData();
   if (!successPush) {
     delay(10000); // 10 secs
     return;
