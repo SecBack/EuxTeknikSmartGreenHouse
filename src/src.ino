@@ -3,9 +3,9 @@
 #include <HTTPClient.h>
 #include <WiFiClientSecure.h>
 #include <Wire.h>
-#include <Adafruit_Sensor.h>
-#include <Adafruit_BME280.h>
+#include <Adafruit_BMP280.h>
 
+#define API_HOST "https://eux-teknik-smartgreenhouse.rasmusbundsgaard.dk"
 #define API_KEY "lEWQZliMMZgASzEwsOKtauUkWToAuiShRrJ7SWN3BHtGbMbaKMYT3dGiSu0E" // This is also unique to each device
 #define SENSOR_TEMP_ID 1
 #define SENSOR_HUMID_ID 2
@@ -14,11 +14,16 @@
 #define WIFI_SSID "Sde-Guest"
 #define WIFI_PSWD ""
 
+#define SEALEVELPRESSURE_HPA (1013.25)
+
+#define PUSH_INTERVAL 10000 // 10 secs
+
 // Clock / NTP setup
 #define NTP_SERVER "pool.ntp.org"
+#define NTP_SERVER_ALT "time.nist.gov"
 
-// This is the Lets Encrypt certficate 
-const char* rootCACertificate = \
+// This is the Lets Encrypt root certficate
+#define ROOT_CA_CERTIFICATE \
 "-----BEGIN CERTIFICATE-----\n" \
 "MIIEkjCCA3qgAwIBAgIQCgFBQgAAAVOFc2oLheynCDANBgkqhkiG9w0BAQsFADA/\n" \
 "MSQwIgYDVQQKExtEaWdpdGFsIFNpZ25hdHVyZSBUcnVzdCBDby4xFzAVBgNVBAMT\n" \
@@ -45,22 +50,9 @@ const char* rootCACertificate = \
 "X4Po1QYz+3dszkDqMp4fklxBwXRsW10KXzPMTZ+sOPAveyxindmjkW8lGy+QsRlG\n" \
 "PfZ+G6Z6h7mjem0Y+iWlkYcV4PIWL1iwBi8saCbGS5jN2p8M+X+Q7UNKEkROb3N6\n" \
 "KOqkqm57TH2H3eDJAkSnh6/DNFu0Qg==\n" \
-"-----END CERTIFICATE-----\n";
+"-----END CERTIFICATE-----\n"
 
-// Domain for API
-const String serverName = "https://eux-teknik-smartgreenhouse.rasmusbundsgaard.dk";
-
-/*#include <SPI.h>
-#define BME_SCK 18
-#define BME_MISO 19
-#define BME_MOSI 23
-#define BME_CS 5*/
-
-#define SEALEVELPRESSURE_HPA (1013.25)
-
-Adafruit_BME280 bme;  // I2C
-//Adafruit_BME280 bme(BME_CS);  // hardware SPI
-//Adafruit_BME280 bme(BME_CS, BME_MOSI, BME_MISO, BME_SCK);  // software SPI
+Adafruit_BMP280 bmp; // I2C
 
 void setup() {
   Serial.begin(115200);
@@ -68,7 +60,7 @@ void setup() {
   WiFi.begin(WIFI_SSID, WIFI_PSWD);
   Serial.println("Connecting");
 
-  while(WiFi.status() != WL_CONNECTED) { 
+  while(WiFi.status() != WL_CONNECTED) {
     delay(500);
     Serial.print(".");
   }
@@ -79,85 +71,119 @@ void setup() {
   Serial.println(WiFi.localIP());
 
   // Init and get the time
-  configTime(0, 0, NTP_SERVER);
-  struct tm timeinfo;
-  if(!getLocalTime(&timeinfo)) {
-    Serial.println("Failed to obtain time");
-  }
-  
-  Serial.println("");
-  Serial.print("Current timestamp:");
-  Serial.println(getCurrentTimestamp());
+  setClock();
 
-//  bool status = bme.begin(0x76);
-//  if (!status) {
-//    Serial.println("Could not find a valid BME280 sensor, check wiring or change I2C address!");
-//    while (1);
-//  }
+  // Could also pass in a Wire library object like &Wire2
+  if (!bmp.begin(BMP280_ADDRESS_ALT)) {
+    Serial.println("Could not find a valid BMP280 sensor, check wiring or change I2C address!");
+    while (1);
+  }
+
+  // Set sampling mode for BMP280
+  bmp.setSampling(Adafruit_BMP280::MODE_NORMAL,     /* Operating Mode. */
+                  Adafruit_BMP280::SAMPLING_X2,     /* Temp. oversampling */
+                  Adafruit_BMP280::SAMPLING_X16,    /* Pressure oversampling */
+                  Adafruit_BMP280::FILTER_X16,      /* Filtering. */
+                  Adafruit_BMP280::STANDBY_MS_500); /* Standby time. */
 }
 
 void loop() {
   // Check WiFi connection status
-  if(WiFi.status() == WL_CONNECTED) {
-    WiFiClientSecure *client = new WiFiClientSecure;
+  if(WiFi.status() != WL_CONNECTED) {
+    Serial.println("Not connected to WiFi");
+    delay(10000); // 10 secs
 
-    if (!client) {
-      Serial.println("Unable to create client");
-      delay(10000);
-      return;
-    }
+    return;
+  }
 
-    client->setCACert(rootCACertificate);
+  bool successPush =pushData();
+  if (!successPush) {
+    delay(10000); // 10 secs
+    return;
+  }
 
-    {
-      HTTPClient http;
+  // If API request was successfull we interval every x minutes
+  delay(PUSH_INTERVAL);
+}
 
-      http.useHTTP10(true);
+bool pushData() {
+  WiFiClientSecure *client = new WiFiClientSecure;
+  if (!client) {
+    Serial.println("Unable to create TLS client");
+    return false;
+  }
 
-      // Domain name with full URL to 'API'
-      if (http.begin(serverName + "/api/v1/sensorData?api_token=" + API_KEY)) {  
-        float sensorTempValue = 23.4;
-        float sensorHumidValue = 50.0;
-        float sensorPresValue = 1.0;
-        String timeStamp = getCurrentTimestamp();
+  // Set the CA certifcate to check the server's certifcate is signed by the trusted CA.
+  client->setCACert(ROOT_CA_CERTIFICATE);
 
-        // Data format: sid:x,v:y,t:z (sensor_id:x,value:y,timestamp:z)
-        String postData = \
-          "sid:" + String(SENSOR_TEMP_ID)  + "," + "v:" + sensorTempValue  + "," + "t:" + timeStamp + "\n" \
-          "sid:" + String(SENSOR_HUMID_ID) + "," + "v:" + sensorHumidValue + "," + "t:" + timeStamp + "\n" \
-          "sid:" + String(SENSOR_PRES_ID)  + "," + "v:" + sensorPresValue  + "," + "t:" + timeStamp;
+  bool success = false; // Successful flag
 
-        http.addHeader("Content-Type", "text/plain");
+  {
+    // Add a scoping block for HTTPClient https to make sure it is destroyed before WiFiClientSecure *client is
 
-        // Send HTTP POST request
-        int httpResponseCode = http.POST(postData);
-        
-        if (httpResponseCode>0) {
-          Serial.print("HTTP Response code: ");
-          Serial.println(httpResponseCode);
-        } else {
-          Serial.print("Error code: ");
-          Serial.println(httpResponseCode);
-        }
+    HTTPClient https;
 
-        // Free resources
-        http.end();
-      } else {
-        Serial.println("[HTTPS] Unable to connect");
+    // Domain name with full URL to 'API'
+    if (!https.begin(*client, String(API_HOST) + "/api/v1/sensorData?api_token=" + API_KEY)) {
+      Serial.println("[HTTPS] Unable to connect");
+      success = false; // Not successful
+    } else {
+      // Get sensor values
+      float sensorTempValue = bmp.readTemperature();
+      float sensorHumidValue = random(0, 101) / 1.0F; // Apparently BMP280 doesnt have humidity sensor
+      float sensorPresValue = bmp.readPressure();
+      String timeStamp = getCurrentTimestamp();
+
+      // Data format: sid:x,v:y,t:z (sensor_id:x,value:y,timestamp:z)
+      String postData = \
+        "sid:" + String(SENSOR_TEMP_ID)  + "," + "v:" + sensorTempValue  + "," + "t:" + timeStamp + "\n" \
+        "sid:" + String(SENSOR_HUMID_ID) + "," + "v:" + sensorHumidValue + "," + "t:" + timeStamp + "\n" \
+        "sid:" + String(SENSOR_PRES_ID)  + "," + "v:" + sensorPresValue  + "," + "t:" + timeStamp;
+
+      // Set correct content type that the API expects
+      https.addHeader("Content-Type", "text/plain");
+
+      // Send HTTP POST request
+      int responseCode = https.POST(postData);
+
+      Serial.print("Response code: ");
+      Serial.println(responseCode);
+
+      // Not successful if error code is not between 200-299
+      if (responseCode < 200 || responseCode >= 300) {
+        success = false;
       }
     }
 
-    delete client;
-  } else {
-    Serial.println("WiFi Disconnected");
+    // Free resources
+    https.end();
   }
 
-  // Send an HTTP POST request every 10 seconds
-  delay(5000);  
+  delete client;
+
+  return success; // Return false if error or true on success
 }
 
+void setClock() {
+  configTime(0, 0, NTP_SERVER, NTP_SERVER_ALT);
 
-String getCurrentTimestamp() {  
+  Serial.print("Waiting for NTP time sync: ");
+  time_t nowSecs = time(nullptr);
+  while (nowSecs < 8 * 3600 * 2) {
+    delay(500);
+    Serial.print(".");
+    yield();
+    nowSecs = time(nullptr);
+  }
+
+  Serial.println();
+  struct tm timeinfo;
+  gmtime_r(&nowSecs, &timeinfo);
+  Serial.print("Current time: ");
+  Serial.print(asctime(&timeinfo));
+}
+
+String getCurrentTimestamp() {
   // https://www.esp32.com/viewtopic.php?f=2&t=7328
   struct timeval tv;
   gettimeofday(&tv, NULL);
@@ -167,7 +193,7 @@ String getCurrentTimestamp() {
   char str[NUM_DIGITS + 1];
 
   char* retStr = uintToStr(milliseconds, str);
-  
+
   return String(retStr);
 }
 
