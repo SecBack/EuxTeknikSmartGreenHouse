@@ -54,8 +54,12 @@
 
 Adafruit_BMP280 bmp; // I2C
 
+#define LED_WINDOW 19
+
 void setup() {
   Serial.begin(115200);
+
+  pinMode(LED_WINDOW, OUTPUT);
 
   WiFi.begin(WIFI_SSID, WIFI_PSWD);
   Serial.println("Connecting");
@@ -88,6 +92,12 @@ void setup() {
 }
 
 void loop() {
+  if (bmp.readTemperature() > 30.0) {
+    digitalWrite(LED_WINDOW, HIGH);
+  } else {
+    digitalWrite(LED_WINDOW, LOW);
+  }
+
   // Check WiFi connection status
   if(WiFi.status() != WL_CONNECTED) {
     Serial.println("Not connected to WiFi");
